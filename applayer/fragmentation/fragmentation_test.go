@@ -188,6 +188,24 @@ func TestFragmentation(t *testing.T) {
 			Bytes:                  []byte{0x01, 0x01, 0xc2, 0xff},
 			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 4 bytes are expected"),
 		},
+		{
+			Name: "FragSessionMissingReq",
+			Command: Command{
+				CID: FragSessionMissingReq,
+				Payload: &FragSessionMissingReqPayload{
+					FragSessionMissingReqParam: FragSessionMissingReqPayloadFragSessionMissingReqParam{
+						Participants: true,
+						FragIndex:    2,
+					},
+				},
+			},
+			Bytes: []byte{0x07, 0x05},
+		},
+		{
+			Name:                   "FragSessionMissingReq invalid bytes",
+			Bytes:                  []byte{0x01},
+			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 1 byte is expected"),
+		},
 	}
 
 	for _, tst := range tests {
