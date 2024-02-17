@@ -203,8 +203,29 @@ func TestFragmentation(t *testing.T) {
 		},
 		{
 			Name:                   "FragSessionMissingReq invalid bytes",
-			Bytes:                  []byte{0x01},
+			Bytes:                  []byte{0x07},
 			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 1 byte is expected"),
+		},
+		{
+			Name:   "FragSessionMissingAns",
+			Uplink: true,
+			Command: Command{
+				CID: FragSessionMissingAns,
+				Payload: &FragSessionMissingAnsPayload{
+					MissingAnsHeader: FragSessionMissingAnsPayloadMissingAnsHeader{
+						IsLastMessage: true,
+						FragIndex:     3,
+					},
+					ReceivedBitField: []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
+				},
+			},
+			Bytes: []byte{0x07, 0x07, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
+		},
+		{
+			Name:                   "FragSessionMissingAns invalid bytes",
+			Uplink:                 true,
+			Bytes:                  []byte{0x07, 0x2},
+			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 2 bytes are expected"),
 		},
 	}
 
