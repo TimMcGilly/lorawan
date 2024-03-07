@@ -213,13 +213,13 @@ func TestFragmentation(t *testing.T) {
 				CID: FragSessionMissingAns,
 				Payload: &FragSessionMissingAnsPayload{
 					MissingAnsHeader: FragSessionMissingAnsPayloadMissingAnsHeader{
-						IsLastMessage: true,
-						FragIndex:     3,
+						FragIndex:          3,
+						BitfieldStartIndex: 513,
 					},
 					ReceivedBitField: []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
 				},
 			},
-			Bytes: []byte{0x07, 0x07, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
+			Bytes: []byte{0x07, 0x01, 0xc2, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
 		},
 		{
 			Name:                   "FragSessionMissingAns invalid bytes",

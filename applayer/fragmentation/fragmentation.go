@@ -587,26 +587,23 @@ type FragSessionMissingAnsPayload struct {
 
 // FragSessionMissingAnsPayloadMissingAnsHeader implements the FragSessionMissingAns payload MissingAnsHeader field.
 type FragSessionMissingAnsPayloadMissingAnsHeader struct {
-	FragIndex     uint8
-	IsLastMessage bool
+	FragIndex          uint8
+	BitfieldStartIndex uint16
 }
 
 // Size returns the payload size in bytes.
 func (p FragSessionMissingAnsPayload) Size() int {
-	return 1 + len(p.ReceivedBitField)
+	return 2 + len(p.ReceivedBitField)
 }
 
 // MarshalBinary encodes the given payload to a slice of bytes.
 func (p FragSessionMissingAnsPayload) MarshalBinary() ([]byte, error) {
 	b := make([]byte, p.Size())
 
-	if p.MissingAnsHeader.IsLastMessage {
-		b[0] |= 0x01
-	}
+	binary.LittleEndian.PutUint16(b[0:2], p.MissingAnsHeader.BitfieldStartIndex&0x3fff)
+	b[1] |= (p.MissingAnsHeader.FragIndex & 0x03) << 6
 
-	b[0] |= (p.MissingAnsHeader.FragIndex & 0x03) << 1
-
-	copy(b[1:], p.ReceivedBitField)
+	copy(b[2:], p.ReceivedBitField)
 
 	return b, nil
 }
@@ -617,10 +614,10 @@ func (p *FragSessionMissingAnsPayload) UnmarshalBinary(data []byte) error {
 		return errors.New("lorawan/applayer/fragmentation: 2 bytes are expected")
 	}
 
-	p.MissingAnsHeader.IsLastMessage = data[0]&0x01 != 0
-	p.MissingAnsHeader.FragIndex = (data[0] >> 1) & 0x03
-	p.ReceivedBitField = make([]byte, len(data[1:]))
-	copy(p.ReceivedBitField, data[1:])
+	p.MissingAnsHeader.BitfieldStartIndex = binary.LittleEndian.Uint16(data[0:2]) & 0x3fff // filter out the FragIndex
+	p.MissingAnsHeader.FragIndex = data[1] >> 6
+	p.ReceivedBitField = make([]byte, len(data[2:]))
+	copy(p.ReceivedBitField, data[2:])
 
 	return nil
 }
