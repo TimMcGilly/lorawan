@@ -17,17 +17,18 @@ const DefaultFPort uint8 = 201
 
 // Available command identifier.
 const (
-	PackageVersionReq     CID = 0x00
-	PackageVersionAns     CID = 0x00
-	FragSessionStatusReq  CID = 0x01
-	FragSessionStatusAns  CID = 0x01
-	FragSessionSetupReq   CID = 0x02
-	FragSessionSetupAns   CID = 0x02
-	FragSessionDeleteReq  CID = 0x03
-	FragSessionDeleteAns  CID = 0x03
-	FragSessionMissingReq CID = 0x07
-	FragSessionMissingAns CID = 0x07
-	DataFragment          CID = 0x08
+	PackageVersionReq      CID = 0x00
+	PackageVersionAns      CID = 0x00
+	FragSessionStatusReq   CID = 0x01
+	FragSessionStatusAns   CID = 0x01
+	FragSessionSetupReq    CID = 0x02
+	FragSessionSetupAns    CID = 0x02
+	FragSessionDeleteReq   CID = 0x03
+	FragSessionDeleteAns   CID = 0x03
+	RetransmitDataFragment CID = 0x06
+	FragSessionMissingReq  CID = 0x07
+	FragSessionMissingAns  CID = 0x07
+	DataFragment           CID = 0x08
 )
 
 // Errors
@@ -45,11 +46,12 @@ var commandPayloadRegistry = map[bool]map[CID]func() CommandPayload{
 		FragSessionMissingAns: func() CommandPayload { return &FragSessionMissingAnsPayload{} },
 	},
 	false: map[CID]func() CommandPayload{
-		FragSessionSetupReq:   func() CommandPayload { return &FragSessionSetupReqPayload{} },
-		FragSessionDeleteReq:  func() CommandPayload { return &FragSessionDeleteReqPayload{} },
-		DataFragment:          func() CommandPayload { return &DataFragmentPayload{} },
-		FragSessionStatusReq:  func() CommandPayload { return &FragSessionStatusReqPayload{} },
-		FragSessionMissingReq: func() CommandPayload { return &FragSessionMissingReqPayload{} },
+		FragSessionSetupReq:    func() CommandPayload { return &FragSessionSetupReqPayload{} },
+		FragSessionDeleteReq:   func() CommandPayload { return &FragSessionDeleteReqPayload{} },
+		RetransmitDataFragment: func() CommandPayload { return &RetransmitDataFragmentPayload{} },
+		DataFragment:           func() CommandPayload { return &DataFragmentPayload{} },
+		FragSessionStatusReq:   func() CommandPayload { return &FragSessionStatusReqPayload{} },
+		FragSessionMissingReq:  func() CommandPayload { return &FragSessionMissingReqPayload{} },
 	},
 }
 
@@ -432,6 +434,48 @@ func (p DataFragmentPayload) MarshalBinary() ([]byte, error) {
 
 // UnmarshalBinary decodes the payload from a slice of bytes.
 func (p *DataFragmentPayload) UnmarshalBinary(data []byte) error {
+	if len(data) < 2 {
+		return errors.New("lorawan/applayer/fragmentation: 2 bytes are expected")
+	}
+
+	p.IndexAndN.N = binary.LittleEndian.Uint16(data[0:2]) & 0x3fff // filter out the FragIndex
+	p.IndexAndN.FragIndex = data[1] >> 6
+	p.Payload = make([]byte, len(data[2:]))
+	copy(p.Payload, data[2:])
+
+	return nil
+}
+
+// RetransmitDataFragmentPayload implements the RetransmitDataFragment payload.
+type RetransmitDataFragmentPayload struct {
+	IndexAndN RetransmitDataFragmentPayloadIndexAndN
+	Payload   []byte
+}
+
+// RetransmitDataFragmentPayloadIndexAndN implements the RetransmitDataFragment payload IndexAndN field.
+type RetransmitDataFragmentPayloadIndexAndN struct {
+	FragIndex uint8
+	N         uint16
+}
+
+// Size returns the payload size in bytes.
+func (p RetransmitDataFragmentPayload) Size() int {
+	return 2 + len(p.Payload)
+}
+
+// MarshalBinary encodes the given payload to a slice of bytes.
+func (p RetransmitDataFragmentPayload) MarshalBinary() ([]byte, error) {
+	b := make([]byte, p.Size())
+
+	binary.LittleEndian.PutUint16(b[0:2], p.IndexAndN.N&0x3fff)
+	b[1] |= (p.IndexAndN.FragIndex & 0x03) << 6
+	copy(b[2:], p.Payload)
+
+	return b, nil
+}
+
+// UnmarshalBinary decodes the payload from a slice of bytes.
+func (p *RetransmitDataFragmentPayload) UnmarshalBinary(data []byte) error {
 	if len(data) < 2 {
 		return errors.New("lorawan/applayer/fragmentation: 2 bytes are expected")
 	}

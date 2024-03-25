@@ -147,6 +147,25 @@ func TestFragmentation(t *testing.T) {
 			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 2 bytes are expected"),
 		},
 		{
+			Name: "RetransmitDataFragment",
+			Command: Command{
+				CID: RetransmitDataFragment,
+				Payload: &RetransmitDataFragmentPayload{
+					IndexAndN: RetransmitDataFragmentPayloadIndexAndN{
+						FragIndex: 3,
+						N:         513,
+					},
+					Payload: []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
+				},
+			},
+			Bytes: []byte{0x06, 0x01, 0xc2, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
+		},
+		{
+			Name:                   "RetransmitDataFragment invalid bytes",
+			Bytes:                  []byte{0x06, 0x01},
+			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 2 bytes are expected"),
+		},
+		{
 			Name: "FragSessionStatusReq",
 			Command: Command{
 				CID: FragSessionStatusReq,
