@@ -626,6 +626,7 @@ func (p *FragSessionMissingReqPayload) UnmarshalBinary(data []byte) error {
 // FragSessionMissingAnsPayload implements the FragSessionMissingAns payload.
 type FragSessionMissingAnsPayload struct {
 	MissingAnsHeader FragSessionMissingAnsPayloadMissingAnsHeader
+	NumMissingAns    uint8
 	ReceivedBitField []byte
 }
 
@@ -637,7 +638,7 @@ type FragSessionMissingAnsPayloadMissingAnsHeader struct {
 
 // Size returns the payload size in bytes.
 func (p FragSessionMissingAnsPayload) Size() int {
-	return 2 + len(p.ReceivedBitField)
+	return 3 + len(p.ReceivedBitField)
 }
 
 // MarshalBinary encodes the given payload to a slice of bytes.
@@ -647,21 +648,23 @@ func (p FragSessionMissingAnsPayload) MarshalBinary() ([]byte, error) {
 	binary.LittleEndian.PutUint16(b[0:2], p.MissingAnsHeader.BitfieldStartIndex&0x3fff)
 	b[1] |= (p.MissingAnsHeader.FragIndex & 0x03) << 6
 
-	copy(b[2:], p.ReceivedBitField)
+	b[2] = p.NumMissingAns
+	copy(b[3:], p.ReceivedBitField)
 
 	return b, nil
 }
 
 // UnmarshalBinary decodes the payload from a slice of bytes.
 func (p *FragSessionMissingAnsPayload) UnmarshalBinary(data []byte) error {
-	if len(data) < 2 {
-		return errors.New("lorawan/applayer/fragmentation: 2 bytes are expected")
+	if len(data) < 3 {
+		return errors.New("lorawan/applayer/fragmentation: 3 bytes are expected")
 	}
 
 	p.MissingAnsHeader.BitfieldStartIndex = binary.LittleEndian.Uint16(data[0:2]) & 0x3fff // filter out the FragIndex
 	p.MissingAnsHeader.FragIndex = data[1] >> 6
-	p.ReceivedBitField = make([]byte, len(data[2:]))
-	copy(p.ReceivedBitField, data[2:])
+	p.NumMissingAns = data[2]
+	p.ReceivedBitField = make([]byte, len(data[3:]))
+	copy(p.ReceivedBitField, data[3:])
 
 	return nil
 }

@@ -235,16 +235,17 @@ func TestFragmentation(t *testing.T) {
 						FragIndex:          3,
 						BitfieldStartIndex: 513,
 					},
+					NumMissingAns:    3,
 					ReceivedBitField: []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
 				},
 			},
-			Bytes: []byte{0x07, 0x01, 0xc2, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
+			Bytes: []byte{0x07, 0x01, 0xc2, 0x03, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
 		},
 		{
 			Name:                   "FragSessionMissingAns invalid bytes",
 			Uplink:                 true,
-			Bytes:                  []byte{0x07, 0x2},
-			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 2 bytes are expected"),
+			Bytes:                  []byte{0x07, 0x2, 0x2},
+			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 3 bytes are expected"),
 		},
 	}
 
