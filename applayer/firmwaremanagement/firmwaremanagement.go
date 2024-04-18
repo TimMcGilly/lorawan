@@ -25,10 +25,10 @@ const (
 	DevRebootTimeAns      CID = 0x02
 	DevRebootCountdownReq CID = 0x03
 	DevRebootCountdownAns CID = 0x03
-	// DevUpgradeImageReq    CID = 0x04
-	// DevUpgradeImageAns    CID = 0x04
-	// DevDeleteImageReq     CID = 0x05
-	// DevDeleteImageAns     CID = 0x05
+	DevUpgradeImageReq    CID = 0x04
+	DevUpgradeImageAns    CID = 0x04
+	DevDeleteImageReq     CID = 0x05
+	DevDeleteImageAns     CID = 0x05
 )
 
 // Errors
@@ -43,15 +43,15 @@ var commandPayloadRegistry = map[bool]map[CID]func() CommandPayload{
 		DevVersionAns:         func() CommandPayload { return &DevVersionAnsPayload{} },
 		DevRebootTimeAns:      func() CommandPayload { return &DevRebootTimeAnsPayload{} },
 		DevRebootCountdownAns: func() CommandPayload { return &DevRebootCountdownAnsPayload{} },
-		//		DevUpgradeImageAns:    func() CommandPayload { return &DevUpgradeImageAnsPayload{} },
-		//		DevDeleteImageAns:     func() CommandPayload { return &DevDeleteImageAnsPayload{} },
+		DevUpgradeImageAns:    func() CommandPayload { return &DevUpgradeImageAnsPayload{} },
+		DevDeleteImageAns:     func() CommandPayload { return &DevDeleteImageAnsPayload{} },
 	},
 	false: map[CID]func() CommandPayload{
 		DevVersionReq:         func() CommandPayload { return &DevVersionReqPayload{} },
 		DevRebootTimeReq:      func() CommandPayload { return &DevRebootTimeReqPayload{} },
 		DevRebootCountdownReq: func() CommandPayload { return &DevRebootCountdownReqPayload{} },
-		//		DevUpgradeImageReq:    func() CommandPayload { return &DevUpgradeImageReqPayload{} },
-		//		DevDeleteImageReq:     func() CommandPayload { return &DevDeleteImageReqPayload{} },
+		DevUpgradeImageReq:    func() CommandPayload { return &DevUpgradeImageReqPayload{} },
+		DevDeleteImageReq:     func() CommandPayload { return &DevDeleteImageReqPayload{} },
 	},
 }
 
@@ -266,7 +266,6 @@ func (p *DevRebootTimeReqPayload) UnmarshalBinary(data []byte) error {
 	}
 
 	p.RebootTime = binary.LittleEndian.Uint32(data[0:4])
-
 	return nil
 }
 
@@ -358,6 +357,138 @@ func (p *DevRebootCountdownAnsPayload) UnmarshalBinary(data []byte) error {
 	countdownB := make([]byte, 4)
 	copy(countdownB, data[0:3])
 	p.Countdown = binary.LittleEndian.Uint32(countdownB)
+
+	return nil
+}
+
+// DevUpgradeImageReqPayload implements the DevUpgradeImageReq payload.
+type DevUpgradeImageReqPayload struct{}
+
+// Size returns the payload size in number of bytes.
+func (p DevUpgradeImageReqPayload) Size() int {
+	return 0
+}
+
+// MarshalBinary encodes the payload to a slice of bytes.
+func (p DevUpgradeImageReqPayload) MarshalBinary() ([]byte, error) {
+	b := make([]byte, p.Size())
+	return b, nil
+}
+
+// UnmarshalBinary decodes the payload from a slice of bytes.
+func (p *DevUpgradeImageReqPayload) UnmarshalBinary(data []byte) error {
+	if len(data) != p.Size() {
+		return fmt.Errorf("lorawan/applayer/firmwaremanagement: %d bytes are expected", p.Size())
+	}
+	return nil
+}
+
+// DevUpgradeImageAnsPayload implements the DevUpgradeImageAns payload.
+type DevUpgradeImageAnsPayload struct {
+	Status              DevUpgradeImageAnsPayloadStatus
+	nextFirmwareVersion uint32
+}
+
+// DevUpgradeImageAnsPayloadStatus implements the DevUpgradeImageAnsPayload payload Status field.
+type DevUpgradeImageAnsPayloadStatus struct {
+	UpImageStatus UpImageStatus
+}
+
+type UpImageStatus uint8
+
+const (
+	NoFirmwarePresent                 UpImageStatus = 0
+	FirmwareCorruptOrInvalidSignature UpImageStatus = 1
+	FirmwareIncorrectHardware         UpImageStatus = 2
+	FirmwareValid                     UpImageStatus = 3
+)
+
+// Size returns the payload size in number of bytes.
+func (p DevUpgradeImageAnsPayload) Size() int {
+	return 5
+}
+
+// MarshalBinary encodes the payload to a slice of bytes.
+func (p DevUpgradeImageAnsPayload) MarshalBinary() ([]byte, error) {
+	b := make([]byte, p.Size())
+	b[0] = uint8(p.Status.UpImageStatus) & 0x3
+	binary.LittleEndian.PutUint32(b[1:5], p.nextFirmwareVersion)
+	return b, nil
+}
+
+// UnmarshalBinary decodes the payload from a slice of bytes.
+func (p *DevUpgradeImageAnsPayload) UnmarshalBinary(data []byte) error {
+	if len(data) < p.Size() {
+		return fmt.Errorf("lorawan/applayer/firmwaremanagement: %d bytes are expected", p.Size())
+	}
+
+	p.Status.UpImageStatus = UpImageStatus(data[0] & 0x3)
+	p.nextFirmwareVersion = binary.LittleEndian.Uint32(data[1:5])
+
+	return nil
+}
+
+// DevDeleteImageReqPayload implements the DevDeleteImageReq payload.
+type DevDeleteImageReqPayload struct {
+	FirmwareToDeleteVersion uint32
+}
+
+// Size returns the payload size in number of bytes.
+func (p DevDeleteImageReqPayload) Size() int {
+	return 4
+}
+
+// MarshalBinary encodes the payload to a slice of bytes.
+func (p DevDeleteImageReqPayload) MarshalBinary() ([]byte, error) {
+	b := make([]byte, p.Size())
+	binary.LittleEndian.PutUint32(b[0:4], p.FirmwareToDeleteVersion)
+	return b, nil
+}
+
+// UnmarshalBinary decodes the payload from a slice of bytes.
+func (p *DevDeleteImageReqPayload) UnmarshalBinary(data []byte) error {
+	if len(data) != p.Size() {
+		return fmt.Errorf("lorawan/applayer/firmwaremanagement: %d bytes are expected", p.Size())
+	}
+
+	p.FirmwareToDeleteVersion = binary.LittleEndian.Uint32(data[0:4])
+
+	return nil
+}
+
+// DevDeleteImageAnsPayload implements the DevDeleteImageAns payload.
+type DevDeleteImageAnsPayload struct {
+	Status DevDeleteImageAnsStatus
+}
+
+// DevDeleteImageAnsPayloadStatus implements the DevDeleteImageAns payload Status field.
+type DevDeleteImageAnsStatus struct {
+	ErrorInvalidVersion uint8
+	ErrorNoValidImage   uint8
+}
+
+// Size returns the payload size in number of bytes.
+func (p DevDeleteImageAnsPayload) Size() int {
+	return 1
+}
+
+// MarshalBinary encodes the payload to a slice of bytes.
+func (p DevDeleteImageAnsPayload) MarshalBinary() ([]byte, error) {
+	b := make([]byte, p.Size())
+	b[0] = p.Status.ErrorNoValidImage & 0x1
+	b[0] = b[0] | (p.Status.ErrorNoValidImage&0x1)<<1
+
+	return b, nil
+}
+
+// UnmarshalBinary decodes the payload from a slice of bytes.
+func (p *DevDeleteImageAnsPayload) UnmarshalBinary(data []byte) error {
+	if len(data) < p.Size() {
+		return fmt.Errorf("lorawan/applayer/firmwaremanagement: %d bytes are expected", p.Size())
+	}
+
+	p.Status.ErrorNoValidImage = data[0] & 0x1
+	p.Status.ErrorInvalidVersion = (data[0] >> 1) & 0x1
 
 	return nil
 }
