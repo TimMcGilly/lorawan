@@ -418,8 +418,8 @@ func (p DevUpgradeImageAnsPayloadStatus) IsFirmwareImageValid() bool {
 
 // MarshalBinary encodes the payload to a slice of bytes.
 func (p DevUpgradeImageAnsPayload) MarshalBinary() ([]byte, error) {
-	if !p.Status.IsFirmwareImageValid() && p.nextFirmwareVersion == nil {
-		return nil, errors.New("lorawan/applayer/multicastsetup: nextFirmwareVersion must be nil when UpImageStatus != 3 due no valid firmware present")
+	if !p.Status.IsFirmwareImageValid() && p.nextFirmwareVersion != nil {
+		return nil, errors.New("lorawan/applayer/firmwaremanagement: nextFirmwareVersion must be nil when UpImageStatus != 3 due no valid firmware present")
 	}
 
 	b := make([]byte, p.Size())
@@ -442,7 +442,7 @@ func (p *DevUpgradeImageAnsPayload) UnmarshalBinary(data []byte) error {
 
 	if p.Status.IsFirmwareImageValid() {
 		if len(data) < p.Size() {
-			return fmt.Errorf("lorawan/applayer/multicastsetup: %d bytes are expected", p.Size())
+			return fmt.Errorf("lorawan/applayer/firmwaremanagement: %d bytes are expected", p.Size())
 		}
 		nextFirmareVersion := binary.LittleEndian.Uint32(data[1:5])
 		p.nextFirmwareVersion = &nextFirmareVersion
