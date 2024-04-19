@@ -386,7 +386,7 @@ func (p *DevUpgradeImageReqPayload) UnmarshalBinary(data []byte) error {
 // DevUpgradeImageAnsPayload implements the DevUpgradeImageAns payload.
 type DevUpgradeImageAnsPayload struct {
 	Status              DevUpgradeImageAnsPayloadStatus
-	nextFirmwareVersion uint32
+	nextFirmwareVersion *uint32
 }
 
 // DevUpgradeImageAnsPayloadStatus implements the DevUpgradeImageAnsPayload payload Status field.
@@ -405,25 +405,48 @@ const (
 
 // Size returns the payload size in number of bytes.
 func (p DevUpgradeImageAnsPayload) Size() int {
-	return 5
+	if p.Status.IsFirmwareImageValid() {
+		return 5
+	}
+	return 1
+}
+
+// Is Firmware image valid
+func (p DevUpgradeImageAnsPayloadStatus) IsFirmwareImageValid() bool {
+	return p.UpImageStatus == FirmwareValid
 }
 
 // MarshalBinary encodes the payload to a slice of bytes.
 func (p DevUpgradeImageAnsPayload) MarshalBinary() ([]byte, error) {
+	if !p.Status.IsFirmwareImageValid() && p.nextFirmwareVersion == nil {
+		return nil, errors.New("lorawan/applayer/multicastsetup: nextFirmwareVersion must be nil when UpImageStatus != 3 due no valid firmware present")
+	}
+
 	b := make([]byte, p.Size())
 	b[0] = uint8(p.Status.UpImageStatus) & 0x3
-	binary.LittleEndian.PutUint32(b[1:5], p.nextFirmwareVersion)
+
+	if p.Status.IsFirmwareImageValid() {
+		binary.LittleEndian.PutUint32(b[1:5], *p.nextFirmwareVersion)
+	}
+
 	return b, nil
 }
 
 // UnmarshalBinary decodes the payload from a slice of bytes.
 func (p *DevUpgradeImageAnsPayload) UnmarshalBinary(data []byte) error {
-	if len(data) < p.Size() {
-		return fmt.Errorf("lorawan/applayer/firmwaremanagement: %d bytes are expected", p.Size())
+	if len(data) < 1 {
+		return errors.New("lorawan/applayer/firmwaremanagement: at least 1 byte is expected")
 	}
 
 	p.Status.UpImageStatus = UpImageStatus(data[0] & 0x3)
-	p.nextFirmwareVersion = binary.LittleEndian.Uint32(data[1:5])
+
+	if p.Status.IsFirmwareImageValid() {
+		if len(data) < p.Size() {
+			return fmt.Errorf("lorawan/applayer/multicastsetup: %d bytes are expected", p.Size())
+		}
+		nextFirmareVersion := binary.LittleEndian.Uint32(data[1:5])
+		p.nextFirmwareVersion = &nextFirmareVersion
+	}
 
 	return nil
 }
