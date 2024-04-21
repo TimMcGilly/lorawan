@@ -221,6 +221,7 @@ func TestFirmwareManagement(t *testing.T) {
 				CID: DevDeleteImageAns,
 				Payload: &DevDeleteImageAnsPayload{
 					Status: DevDeleteImageAnsPayloadStatus{
+
 						ErrorInvalidVersion: 1,
 						ErrorNoValidImage:   1,
 					},

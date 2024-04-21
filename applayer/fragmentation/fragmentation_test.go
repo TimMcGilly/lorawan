@@ -147,6 +147,25 @@ func TestFragmentation(t *testing.T) {
 			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 2 bytes are expected"),
 		},
 		{
+			Name: "RetransmitDataFragment",
+			Command: Command{
+				CID: RetransmitDataFragment,
+				Payload: &RetransmitDataFragmentPayload{
+					IndexAndN: RetransmitDataFragmentPayloadIndexAndN{
+						FragIndex: 3,
+						N:         513,
+					},
+					Payload: []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
+				},
+			},
+			Bytes: []byte{0x05, 0x01, 0xc2, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
+		},
+		{
+			Name:                   "RetransmitDataFragment invalid bytes",
+			Bytes:                  []byte{0x05, 0x01},
+			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 2 bytes are expected"),
+		},
+		{
 			Name: "FragSessionStatusReq",
 			Command: Command{
 				CID: FragSessionStatusReq,
@@ -187,6 +206,86 @@ func TestFragmentation(t *testing.T) {
 			Uplink:                 true,
 			Bytes:                  []byte{0x01, 0x01, 0xc2, 0xff},
 			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 4 bytes are expected"),
+		},
+		{
+			Name: "FragSessionMissingBitReq",
+			Command: Command{
+				CID: FragSessionMissingBitReq,
+				Payload: &FragSessionMissingBitReqPayload{
+					FragSessionMissingReqParam: FragSessionMissingReqPayloadFragSessionMissingReqParam{
+						Participants: true,
+						FragIndex:    2,
+					},
+				},
+			},
+			Bytes: []byte{0x07, 0x05},
+		},
+		{
+			Name:                   "FragSessionMissingBitReq invalid bytes",
+			Bytes:                  []byte{0x07},
+			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 1 byte is expected"),
+		},
+		{
+			Name:   "FragSessionMissingBitAns",
+			Uplink: true,
+			Command: Command{
+				CID: FragSessionMissingBitAns,
+				Payload: &FragSessionMissingBitAnsPayload{
+					MissingAnsHeader: FragSessionMissingBitAnsPayloadMissingAnsHeader{
+						FragIndex:          3,
+						BitArrayStartIndex: 513,
+					},
+					NumMissingAns:    3,
+					ReceivedBitArray: []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
+				},
+			},
+			Bytes: []byte{0x07, 0x01, 0xc2, 0x03, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06},
+		},
+		{
+			Name:                   "FragSessionMissingBitAns invalid bytes",
+			Uplink:                 true,
+			Bytes:                  []byte{0x07, 0x2, 0x2},
+			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 3 bytes are expected"),
+		},
+
+		{
+			Name: "FragSessionMissingListReq",
+			Command: Command{
+				CID: FragSessionMissingListReq,
+				Payload: &FragSessionMissingListReqPayload{
+					FragSessionMissingReqParam: FragSessionMissingReqPayloadFragSessionMissingReqParam{
+						Participants: true,
+						FragIndex:    3,
+					},
+				},
+			},
+			Bytes: []byte{0x06, 0x07},
+		},
+		{
+			Name:                   "FragSessionMissingListReq invalid bytes",
+			Bytes:                  []byte{0x06},
+			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 1 byte is expected"),
+		},
+		{
+			Name:   "FragSessionMissingListAns",
+			Uplink: true,
+			Command: Command{
+				CID: FragSessionMissingListAns,
+				Payload: &FragSessionMissingListAnsPayload{
+					MissingAnsHeader: FragSessionMissingListAnsPayloadMissingAnsHeader{
+						FragIndex: 3,
+					},
+					NumMissingAns: 5,
+					MissingList:   []uint16{0x0001, 0x0200, 0x3000},
+				},
+			},
+			Bytes: []byte{0x06, 0x3, 0x5, 0x01, 0x00, 0x00, 0x02, 0x00, 0x30},
+		},
+		{
+			Name:                   "FragSessionMissingBitAns invalid bytes",
+			Uplink:                 true,
+			Bytes:                  []byte{0x06, 0x2},
+			ExpectedUnmarshalError: errors.New("lorawan/applayer/fragmentation: 2 bytes are expected"),
 		},
 	}
 

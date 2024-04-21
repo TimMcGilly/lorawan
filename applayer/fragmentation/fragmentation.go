@@ -4,6 +4,7 @@
 package fragmentation
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -17,15 +18,20 @@ const DefaultFPort uint8 = 201
 
 // Available command identifier.
 const (
-	PackageVersionReq    CID = 0x00
-	PackageVersionAns    CID = 0x00
-	FragSessionStatusReq CID = 0x01
-	FragSessionStatusAns CID = 0x01
-	FragSessionSetupReq  CID = 0x02
-	FragSessionSetupAns  CID = 0x02
-	FragSessionDeleteReq CID = 0x03
-	FragSessionDeleteAns CID = 0x03
-	DataFragment         CID = 0x08
+	PackageVersionReq         CID = 0x00
+	PackageVersionAns         CID = 0x00
+	FragSessionStatusReq      CID = 0x01
+	FragSessionStatusAns      CID = 0x01
+	FragSessionSetupReq       CID = 0x02
+	FragSessionSetupAns       CID = 0x02
+	FragSessionDeleteReq      CID = 0x03
+	FragSessionDeleteAns      CID = 0x03
+	RetransmitDataFragment    CID = 0x05
+	FragSessionMissingListReq CID = 0x06
+	FragSessionMissingListAns CID = 0x06
+	FragSessionMissingBitReq  CID = 0x07
+	FragSessionMissingBitAns  CID = 0x07
+	DataFragment              CID = 0x08
 )
 
 // Errors
@@ -36,16 +42,21 @@ var (
 // map[uplink]...
 var commandPayloadRegistry = map[bool]map[CID]func() CommandPayload{
 	true: map[CID]func() CommandPayload{
-		PackageVersionAns:    func() CommandPayload { return &PackageVersionAnsPayload{} },
-		FragSessionSetupAns:  func() CommandPayload { return &FragSessionSetupAnsPayload{} },
-		FragSessionDeleteAns: func() CommandPayload { return &FragSessionDeleteAnsPayload{} },
-		FragSessionStatusAns: func() CommandPayload { return &FragSessionStatusAnsPayload{} },
+		PackageVersionAns:         func() CommandPayload { return &PackageVersionAnsPayload{} },
+		FragSessionSetupAns:       func() CommandPayload { return &FragSessionSetupAnsPayload{} },
+		FragSessionDeleteAns:      func() CommandPayload { return &FragSessionDeleteAnsPayload{} },
+		FragSessionStatusAns:      func() CommandPayload { return &FragSessionStatusAnsPayload{} },
+		FragSessionMissingListAns: func() CommandPayload { return &FragSessionMissingListAnsPayload{} },
+		FragSessionMissingBitAns:  func() CommandPayload { return &FragSessionMissingBitAnsPayload{} },
 	},
 	false: map[CID]func() CommandPayload{
-		FragSessionSetupReq:  func() CommandPayload { return &FragSessionSetupReqPayload{} },
-		FragSessionDeleteReq: func() CommandPayload { return &FragSessionDeleteReqPayload{} },
-		DataFragment:         func() CommandPayload { return &DataFragmentPayload{} },
-		FragSessionStatusReq: func() CommandPayload { return &FragSessionStatusReqPayload{} },
+		FragSessionSetupReq:       func() CommandPayload { return &FragSessionSetupReqPayload{} },
+		FragSessionDeleteReq:      func() CommandPayload { return &FragSessionDeleteReqPayload{} },
+		RetransmitDataFragment:    func() CommandPayload { return &RetransmitDataFragmentPayload{} },
+		DataFragment:              func() CommandPayload { return &DataFragmentPayload{} },
+		FragSessionStatusReq:      func() CommandPayload { return &FragSessionStatusReqPayload{} },
+		FragSessionMissingListReq: func() CommandPayload { return &FragSessionMissingListReqPayload{} },
+		FragSessionMissingBitReq:  func() CommandPayload { return &FragSessionMissingBitReqPayload{} },
 	},
 }
 
@@ -440,6 +451,48 @@ func (p *DataFragmentPayload) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// RetransmitDataFragmentPayload implements the RetransmitDataFragment payload.
+type RetransmitDataFragmentPayload struct {
+	IndexAndN RetransmitDataFragmentPayloadIndexAndN
+	Payload   []byte
+}
+
+// RetransmitDataFragmentPayloadIndexAndN implements the RetransmitDataFragment payload IndexAndN field.
+type RetransmitDataFragmentPayloadIndexAndN struct {
+	FragIndex uint8
+	N         uint16
+}
+
+// Size returns the payload size in bytes.
+func (p RetransmitDataFragmentPayload) Size() int {
+	return 2 + len(p.Payload)
+}
+
+// MarshalBinary encodes the given payload to a slice of bytes.
+func (p RetransmitDataFragmentPayload) MarshalBinary() ([]byte, error) {
+	b := make([]byte, p.Size())
+
+	binary.LittleEndian.PutUint16(b[0:2], p.IndexAndN.N&0x3fff)
+	b[1] |= (p.IndexAndN.FragIndex & 0x03) << 6
+	copy(b[2:], p.Payload)
+
+	return b, nil
+}
+
+// UnmarshalBinary decodes the payload from a slice of bytes.
+func (p *RetransmitDataFragmentPayload) UnmarshalBinary(data []byte) error {
+	if len(data) < 2 {
+		return errors.New("lorawan/applayer/fragmentation: 2 bytes are expected")
+	}
+
+	p.IndexAndN.N = binary.LittleEndian.Uint16(data[0:2]) & 0x3fff // filter out the FragIndex
+	p.IndexAndN.FragIndex = data[1] >> 6
+	p.Payload = make([]byte, len(data[2:]))
+	copy(p.Payload, data[2:])
+
+	return nil
+}
+
 // FragSessionStatusReqPayload implements the FragSessionStatusReq payload.
 type FragSessionStatusReqPayload struct {
 	FragStatusReqParam FragSessionStatusReqPayloadFragStatusReqParam
@@ -531,5 +584,182 @@ func (p *FragSessionStatusAnsPayload) UnmarshalBinary(data []byte) error {
 	p.MissingFrag = data[2]
 	p.Status.NotEnoughMatrixMemory = data[3]&0x01 != 0
 
+	return nil
+}
+
+// FragSessionMissingBitReqPayload implements the FragSessionMissingBitReq payload.
+type FragSessionMissingBitReqPayload struct {
+	FragSessionMissingReqParam FragSessionMissingReqPayloadFragSessionMissingReqParam
+}
+
+// FragSessionMissingReqPayloadFragSessionMissingReqParam implements the FragSessionMissingBitReq payload FragSessionMissingReqParam field.
+type FragSessionMissingReqPayloadFragSessionMissingReqParam struct {
+	FragIndex    uint8
+	Participants bool
+}
+
+// Size returns the payload size in number of bytes.
+func (p FragSessionMissingBitReqPayload) Size() int {
+	return 1
+}
+
+// MarshalBinary encodes the payload to a slice of bytes.
+func (p FragSessionMissingBitReqPayload) MarshalBinary() ([]byte, error) {
+	b := make([]byte, p.Size())
+
+	if p.FragSessionMissingReqParam.Participants {
+		b[0] |= 0x01
+	}
+
+	b[0] |= (p.FragSessionMissingReqParam.FragIndex & 0x03) << 1
+
+	return b, nil
+}
+
+// UnmarshalBinary decodes the payload from a slice of bytes.
+func (p *FragSessionMissingBitReqPayload) UnmarshalBinary(data []byte) error {
+	if len(data) < p.Size() {
+		return fmt.Errorf("lorawan/applayer/fragmentation: %d byte is expected", p.Size())
+	}
+
+	p.FragSessionMissingReqParam.Participants = data[0]&0x01 != 0
+	p.FragSessionMissingReqParam.FragIndex = (data[0] >> 1) & 0x03
+
+	return nil
+}
+
+// FragSessionMissingBitAnsPayload implements the FragSessionMissingAns payload.
+type FragSessionMissingBitAnsPayload struct {
+	MissingAnsHeader FragSessionMissingBitAnsPayloadMissingAnsHeader
+	NumMissingAns    uint8
+	ReceivedBitArray []byte
+}
+
+// FragSessionMissingBitAnsPayloadMissingAnsHeader implements the FragSessionMissingAns payload MissingAnsHeader field.
+type FragSessionMissingBitAnsPayloadMissingAnsHeader struct {
+	FragIndex          uint8
+	BitArrayStartIndex uint16
+}
+
+// Size returns the payload size in bytes.
+func (p FragSessionMissingBitAnsPayload) Size() int {
+	return 3 + len(p.ReceivedBitArray)
+}
+
+// MarshalBinary encodes the given payload to a slice of bytes.
+func (p FragSessionMissingBitAnsPayload) MarshalBinary() ([]byte, error) {
+	b := make([]byte, p.Size())
+
+	binary.LittleEndian.PutUint16(b[0:2], p.MissingAnsHeader.BitArrayStartIndex&0x3fff)
+	b[1] |= (p.MissingAnsHeader.FragIndex & 0x03) << 6
+
+	b[2] = p.NumMissingAns
+	copy(b[3:], p.ReceivedBitArray)
+
+	return b, nil
+}
+
+// UnmarshalBinary decodes the payload from a slice of bytes.
+func (p *FragSessionMissingBitAnsPayload) UnmarshalBinary(data []byte) error {
+	if len(data) < 3 {
+		return errors.New("lorawan/applayer/fragmentation: 3 bytes are expected")
+	}
+
+	p.MissingAnsHeader.BitArrayStartIndex = binary.LittleEndian.Uint16(data[0:2]) & 0x3fff // filter out the FragIndex
+	p.MissingAnsHeader.FragIndex = data[1] >> 6
+	p.NumMissingAns = data[2]
+	p.ReceivedBitArray = make([]byte, len(data[3:]))
+	copy(p.ReceivedBitArray, data[3:])
+
+	return nil
+}
+
+// FragSessionMissingBitReqPayload implements the FragSessionMissingReq payload.
+type FragSessionMissingListReqPayload struct {
+	FragSessionMissingReqParam FragSessionMissingReqPayloadFragSessionMissingReqParam
+}
+
+// Size returns the payload size in number of bytes.
+func (p FragSessionMissingListReqPayload) Size() int {
+	return 1
+}
+
+// MarshalBinary encodes the payload to a slice of bytes.
+func (p FragSessionMissingListReqPayload) MarshalBinary() ([]byte, error) {
+	b := make([]byte, p.Size())
+
+	if p.FragSessionMissingReqParam.Participants {
+		b[0] |= 0x01
+	}
+
+	b[0] |= (p.FragSessionMissingReqParam.FragIndex & 0x03) << 1
+
+	return b, nil
+}
+
+// UnmarshalBinary decodes the payload from a slice of bytes.
+func (p *FragSessionMissingListReqPayload) UnmarshalBinary(data []byte) error {
+	if len(data) < p.Size() {
+		return fmt.Errorf("lorawan/applayer/fragmentation: %d byte is expected", p.Size())
+	}
+
+	p.FragSessionMissingReqParam.Participants = data[0]&0x01 != 0
+	p.FragSessionMissingReqParam.FragIndex = (data[0] >> 1) & 0x03
+
+	return nil
+}
+
+// FragSessionMissingBitAnsPayload implements the FragSessionMissingAns payload.
+type FragSessionMissingListAnsPayload struct {
+	MissingAnsHeader FragSessionMissingListAnsPayloadMissingAnsHeader
+	NumMissingAns    uint8
+	MissingList      []uint16
+}
+
+// FragSessionMissingBitAnsPayloadMissingAnsHeader implements the FragSessionMissingListAnsPayload payload MissingAnsHeader field.
+type FragSessionMissingListAnsPayloadMissingAnsHeader struct {
+	FragIndex uint8
+}
+
+// Size returns the payload size in bytes.
+func (p FragSessionMissingListAnsPayload) Size() int {
+	return 2 + len(p.MissingList)*2
+}
+
+// MarshalBinary encodes the given payload to a slice of bytes.
+func (p FragSessionMissingListAnsPayload) MarshalBinary() ([]byte, error) {
+	b := make([]byte, p.Size())
+
+	b[0] |= (p.MissingAnsHeader.FragIndex & 0x03)
+
+	b[1] = p.NumMissingAns
+
+	wbuf := new(bytes.Buffer)
+	err := binary.Write(wbuf, binary.LittleEndian, p.MissingList)
+	if err != nil {
+		return nil, err
+	}
+	copy(b[2:], wbuf.Bytes())
+
+	return b, nil
+}
+
+// UnmarshalBinary decodes the payload from a slice of bytes.
+func (p *FragSessionMissingListAnsPayload) UnmarshalBinary(data []byte) error {
+	if len(data) < 2 {
+		return errors.New("lorawan/applayer/fragmentation: 2 bytes are expected")
+	}
+
+	p.MissingAnsHeader.FragIndex = data[0] & 0x03
+	p.NumMissingAns = data[1]
+
+	rbuf := bytes.NewBuffer(data[2:])
+
+	p.MissingList = make([]uint16, len(data[2:])/2)
+
+	err := binary.Read(rbuf, binary.LittleEndian, &p.MissingList)
+	if err != nil {
+		return err
+	}
 	return nil
 }

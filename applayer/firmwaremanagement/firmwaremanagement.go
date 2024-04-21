@@ -488,6 +488,7 @@ type DevDeleteImageAnsPayload struct {
 
 // DevDeleteImageAnsPayloadStatus implements the DevDeleteImageAns payload Status field.
 type DevDeleteImageAnsPayloadStatus struct {
+
 	ErrorInvalidVersion uint8
 	ErrorNoValidImage   uint8
 }
