@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFragmentation(t *testing.T) {
+func TestFirmwareManagement(t *testing.T) {
 	nextFirmwareVersion := uint32(262657)
 
 	tests := []struct {
@@ -220,7 +220,8 @@ func TestFragmentation(t *testing.T) {
 			Command: Command{
 				CID: DevDeleteImageAns,
 				Payload: &DevDeleteImageAnsPayload{
-					Status: DevDeleteImageAnsStatus{
+					Status: DevDeleteImageAnsPayloadStatus{
+
 						ErrorInvalidVersion: 1,
 						ErrorNoValidImage:   1,
 					},
